@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>OpenStream - Free Live TV</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <meta name="google-site-verification" content="vzuZcCaWrfOHuonXpbDXDEtmG1FiiWPxb2h5IjRepy8" />
+    <style>
+        :root {
+            --bg-dark: #000000;
+            --bg-panel: #121212;
+            --bg-hover: #222222;
+            --accent: #e50914;
+            --border: #333333;
+            --text-main: #ffffff;
+            --text-muted: #a1a1a1;
+            --fav-gold: #ffca28;
+        }
+
+        * {
+            box-sizing: border-box;
+            outline: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        #sidebar {
+            width: 350px;
+            background-color: var(--bg-panel);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            z-index: 2;
+        }
+
+        #main-view {
+            flex: 1;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: var(--bg-dark);
+        }
+
+        .search-container {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            background-color: var(--bg-panel);
+            display: flex;
+            align-items: center;
+        }
+
+        #search-input {
+            width: 100%;
+            padding: 12px 16px;
+            background-color: var(--bg-hover);
+            border: 1px solid transparent;
+            border-radius: 6px;
+            color: var(--text-main);
+            font-size: 15px;
+            transition: border-color 0.2s;
+        }
+
+        #search-input:focus {
+            border-color: var(--border);
+        }
+
+        #search-input::placeholder {
+            color: #666;
+        }
+
+        #channel-list {
+            flex: 1;
+            overflow-y: auto;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .channel-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--bg-hover);
+            transition: background-color 0.1s;
+        }
+
+        .channel-item:hover {
+            background-color: var(--bg-hover);
+        }
+
+        .channel-item.active {
+            background-color: var(--bg-hover);
+            border-left: 3px solid var(--accent);
+            padding-left: 13px;
+        }
+
+        .fav-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #444;
+            padding: 8px 12px 8px 0;
+            font-size: 22px;
+            line-height: 1;
+            transition: transform 0.2s, color 0.2s;
+            user-select: none;
+        }
+
+        .fav-btn:hover {
+            transform: scale(1.2);
+            color: #666;
+        }
+
+        .fav-btn.is-favorite {
+            color: var(--fav-gold);
+        }
+
+        .fav-btn.is-favorite:hover {
+            color: #ffd54f;
+        }
+
+        .channel-logo {
+            width: 36px;
+            height: 36px;
+            background-color: #333;
+            border-radius: 6px;
+            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: #888;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .channel-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .channel-info {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .channel-name {
+            font-size: 15px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+        }
+
+        .channel-meta {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            max-height: 100vh;
+            background: #000;
+        }
+
+        #status-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .status-text {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 900px) {
+            body {
+                flex-direction: column;
+            }
+
+            #main-view {
+                flex: 0 0 auto;
+                width: 100%;
+                height: 40vh;
+                border-bottom: 1px solid var(--border);
+                position: sticky;
+                top: 0;
+                z-index: 10;
+            }
+
+            #sidebar {
+                width: 100%;
+                height: 60vh;
+                border-right: none;
+            }
+
+            video {
+                max-height: 40vh;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="sidebar">
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="Find a channel..." autocomplete="off">
+        </div>
+        <ul id="channel-list">
+        </ul>
+    </div>
+
+    <div id="main-view">
+        <video id="video" controls autoplay playsinline></video>
+        <div id="status-overlay">
+            <div class="status-text" id="status-msg">Select a channel to play</div>
+        </div>
+    </div>
+
+    <script>
+        const M3U_URL = 'index.m3u';
+        let allChannels = [];
+        let activeChannelId = null;
+
+        const storage = {
+            get: (key) => {
+                try {
+                    return JSON.parse(localStorage.getItem(key)) || [];
+                } catch (e) {
+                    return window._memStore ? window._memStore[key] : [];
+                }
+            },
+            set: (key, value) => {
+                try {
+                    localStorage.setItem(key, JSON.stringify(value));
+                } catch (e) {
+                    if (!window._memStore) window._memStore = {};
+                    window._memStore[key] = value;
+                }
+            }
+        };
+
+        let favorites = storage.get('openstream_favs');
+
+        const video = document.getElementById('video');
+        const list = document.getElementById('channel-list');
+        const statusMsg = document.getElementById('status-msg');
+        let hls = null;
+
+        fetch(M3U_URL)
+            .then(r => r.text())
+            .then(parseM3U)
+            .catch(e => {
+                statusMsg.innerText = "Error: Could not load index.m3u";
+            });
+
+        document.getElementById('search-input').addEventListener('input', () => {
+            renderChannels();
+        });
+
+        function parseM3U(data) {
+            const lines = data.split('\n');
+            let current = {};
+            allChannels = [];
+
+            lines.forEach(line => {
+                line = line.trim();
+                if (line.startsWith('#EXTINF:')) {
+                    const info = line.split(',');
+                    current.name = info[1] || "Unknown Channel";
+
+                    const logoMatch = line.match(/tvg-logo="([^"]*)"/);
+                    current.logo = logoMatch ? logoMatch[1] : null;
+
+                    if (current.name.includes('(1080p)')) current.quality = 'HD';
+                    else if (current.name.includes('(720p)')) current.quality = 'HD';
+                    else current.quality = 'SD';
+
+                } else if (line && !line.startsWith('#')) {
+                    current.url = line;
+                    current.id = current.url;
+                    allChannels.push(current);
+                    current = {};
+                }
+            });
+            renderChannels();
+        }
+
+        function toggleFavorite(e, id) {
+            e.stopPropagation();
+            e.preventDefault();
+
+            const index = favorites.indexOf(id);
+            if (index > -1) {
+                favorites.splice(index, 1);
+            } else {
+                favorites.push(id);
+            }
+
+            storage.set('openstream_favs', favorites);
+            renderChannels();
+        }
+
+        function renderChannels() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+
+            let filtered = allChannels.filter(ch => {
+                // Filter by name
+                const matchesName = ch.name.toLowerCase().includes(query);
+                // Hide HTTP channels (allow only HTTPS)
+                const isSecure = ch.url.startsWith('https');
+                return matchesName && isSecure;
+            });
+
+            filtered.sort((a, b) => {
+                const aFav = favorites.includes(a.id);
+                const bFav = favorites.includes(b.id);
+                if (aFav && !bFav) return -1;
+                if (!aFav && bFav) return 1;
+                return 0;
+            });
+
+            list.innerHTML = '';
+
+            if (filtered.length === 0) {
+                list.innerHTML = '<li style="padding:20px; text-align:center; color:#666;">No channels found</li>';
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+
+            filtered.forEach(ch => {
+                const isFav = favorites.includes(ch.id);
+                const isActive = (ch.id === activeChannelId);
+
+                const li = document.createElement('li');
+                li.className = `channel-item ${isActive ? 'active' : ''}`;
+                li.onclick = () => loadChannel(ch);
+
+                const favBtn = document.createElement('button');
+                favBtn.className = `fav-btn ${isFav ? 'is-favorite' : ''}`;
+                favBtn.innerHTML = isFav ? '★' : '☆';
+                favBtn.onclick = (e) => toggleFavorite(e, ch.id);
+                li.appendChild(favBtn);
+
+                const logoDiv = document.createElement('div');
+                logoDiv.className = 'channel-logo';
+                if (ch.logo) {
+                    const img = document.createElement('img');
+                    img.src = ch.logo;
+                    img.loading = "lazy";
+                    img.onerror = () => { img.style.display = 'none'; logoDiv.innerText = ch.name[0]; };
+                    logoDiv.appendChild(img);
+                } else {
+                    logoDiv.innerText = ch.name.charAt(0);
+                }
+
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'channel-info';
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'channel-name';
+                nameSpan.innerText = ch.name;
+
+                const metaSpan = document.createElement('div');
+                metaSpan.className = 'channel-meta';
+                metaSpan.innerText = ch.quality || '';
+
+                infoDiv.appendChild(nameSpan);
+                infoDiv.appendChild(metaSpan);
+
+                li.appendChild(logoDiv);
+                li.appendChild(infoDiv);
+                fragment.appendChild(li);
+            });
+
+            list.appendChild(fragment);
+        }
+
+        function loadChannel(ch) {
+            activeChannelId = ch.id;
+
+            renderChannels();
+
+            statusMsg.style.display = 'none';
+
+            if (Hls.isSupported()) {
+                if (hls) hls.destroy();
+                hls = new Hls();
+                hls.loadSource(ch.url);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = ch.url;
+                video.play();
+            }
+        }
+    </script>
+</body>
+
+</html>
